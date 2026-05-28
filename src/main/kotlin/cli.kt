@@ -5,6 +5,7 @@ import java.nio.file.Paths
 import kotlin.system.exitProcess
 
 internal data class Config(
+    val kotlinVersion: String,
     val outputDirectory: Path,
     val numberOfProjects: Int,
     val cInteropProjects: Int,
@@ -46,6 +47,7 @@ internal fun parseArgs(args: Array<String>): Config {
     val numberOfProjects = getRequiredIntArgument(NUMBER_OF_PROJECTS, minValue = 1, maxValue = 100_000)
 
     return Config(
+        kotlinVersion = getRequiredArgument(KOTLIN_VERSION),
         outputDirectory = outputDirectory,
         numberOfProjects = numberOfProjects,
         cInteropProjects = getRequiredIntArgument(CINTEROP_PROJECTS, minValue = 0, maxValue = numberOfProjects),
@@ -59,6 +61,7 @@ private enum class Parameter(val alias: String, val description: String) {
     HELP(alias = "--help", description = "Print help"),
 
     /** General settings */
+    KOTLIN_VERSION(alias = "--kotlin-version", description = "Kotlin version"),
     OUTPUT_DIRECTORY(alias = "--output-dir", description = "Path to the output directory (must be empty)"),
     NUMBER_OF_PROJECTS(alias = "--number-of-projects", description = "Number of projects (positive number)"),
     CINTEROP_PROJECTS(alias = "--cinterop-projects", description = "Number of projects (non-negative number)"),

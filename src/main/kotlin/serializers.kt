@@ -19,6 +19,7 @@ internal class ProjectSerializer(private val config: Config) {
         copyGradleWrapper()
         writeMainBuildSettings(projects)
         writeMainBuildFile()
+        writeGradlePropertiesFile()
 
         for (project in projects) {
             generateProject(project)
@@ -47,7 +48,7 @@ internal class ProjectSerializer(private val config: Config) {
         config.outputDirectory.resolve("build.gradle.kts").writeText(
             """
             |plugins {
-            |    kotlin("multiplatform") version "2.4.0-RC" apply false
+            |    kotlin("multiplatform") version "${config.kotlinVersion}" apply false
             |}
             |
             |allprojects {
@@ -59,6 +60,14 @@ internal class ProjectSerializer(private val config: Config) {
             |    tasks.all { outputs.upToDateWhen { false } }
             |}
             """.trimMargin()
+        )
+    }
+
+    private fun writeGradlePropertiesFile() {
+        config.outputDirectory.resolve("gradle.properties").writeText(
+            listOf(
+                "kotlin.internal.compiler.arguments.log.level=warning"
+            ).joinToString("\n", postfix = "\n")
         )
     }
 
