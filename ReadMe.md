@@ -17,3 +17,9 @@ How to build the generated project:
 cd <outputDir>
 ./gradlew :app:assemble
 ```
+Note: If you experience lots of GC during the build, or even OOM, please try adjusting JVM heap size settings.
+
+Edit `<outputDir>/gradle.properties` and add something like this:
+```
+org.gradle.jvmargs=-Xmx16g
+```

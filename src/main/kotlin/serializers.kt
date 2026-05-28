@@ -66,7 +66,8 @@ internal class ProjectSerializer(private val config: Config) {
     private fun writeGradlePropertiesFile() {
         config.outputDirectory.resolve("gradle.properties").writeText(
             listOf(
-                "kotlin.internal.compiler.arguments.log.level=warning"
+                "kotlin.internal.compiler.arguments.log.level=warning",
+                "org.gradle.jvmargs=-Xmx16g",
             ).joinToString("\n", postfix = "\n")
         )
     }
