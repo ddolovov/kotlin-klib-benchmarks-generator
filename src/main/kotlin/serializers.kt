@@ -37,8 +37,8 @@ internal class ProjectSerializer(private val config: Config) {
             buildString {
                 appendLine("rootProject.name = \"kotlin-klib-benchmarks\"")
                 appendLine()
-                for (project in projects) {
-                    appendLine("include(\":${project.name}\")")
+                projects.chunked(10).forEach { chunk ->
+                    chunk.joinTo(this, prefix = "include(", postfix = ")\n") { '"' + it.name + '"' }
                 }
             }
         )
