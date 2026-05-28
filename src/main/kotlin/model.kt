@@ -3,10 +3,28 @@ internal class Project(
     val packageName: String,
     val declarations: List<Declaration>,
     val dependencies: List<Project>,
-    val isApplication: Boolean,
+    val kind: Kind,
 ) {
+    enum class Kind { REGULAR, APP, CINTEROP }
+
+    val isApplication get() = kind == Kind.APP
+    val isCInterop get() = kind == Kind.CINTEROP
+
+    init {
+        if (isApplication) {
+            check(packageName.isEmpty())
+            check(declarations.isEmpty())
+            check(dependencies.isNotEmpty())
+        } else if (isCInterop) {
+            check(declarations.isNotEmpty())
+            check(declarations.all { it is Declaration.Function }) // only functions supported for now
+        } else {
+            check(declarations.isNotEmpty())
+        }
+    }
+
     override fun toString() =
-        "Project[$name, package=$packageName, declarations=${declarations.size}, dependencies=${dependencies.size}"
+        "Project[$name, $kind, package=$packageName, declarations=${declarations.size}, dependencies=${dependencies.size}"
 }
 
 sealed class Declaration(val name: String) {

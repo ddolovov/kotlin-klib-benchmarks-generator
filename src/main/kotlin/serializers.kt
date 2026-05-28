@@ -46,19 +46,19 @@ internal class ProjectSerializer(private val config: Config) {
     private fun writeMainBuildFile() {
         config.outputDirectory.resolve("build.gradle.kts").writeText(
             """
-                plugins {
-                    kotlin("multiplatform") version "2.4.0-RC" apply false
-                }
-
-                allprojects {
-                    repositories {
-                        mavenCentral()
-                    }
-
-                    // Force all tasks to be never UP-TO-DATE.
-                    tasks.all { outputs.upToDateWhen { false } }
-                }
-            """.trimIndent()
+            |plugins {
+            |    kotlin("multiplatform") version "2.4.0-RC" apply false
+            |}
+            |
+            |allprojects {
+            |    repositories {
+            |        mavenCentral()
+            |    }
+            |
+            |    // Force all tasks to be never UP-TO-DATE.
+            |    tasks.all { outputs.upToDateWhen { false } }
+            |}
+            """.trimMargin()
         )
     }
 
@@ -66,66 +66,107 @@ internal class ProjectSerializer(private val config: Config) {
         val projectDir = config.outputDirectory.resolve(project.name)
         Files.createDirectories(projectDir)
 
-        fun target(name: String) = name + if (project.isApplication) " { binaries.executable { entryPoint = \"main\" } }" else "()"
+        fun target(name: String): String = name + when (project.kind) {
+            Project.Kind.REGULAR -> "()"
+            Project.Kind.APP -> " { binaries.executable { entryPoint = \"main\" } }"
+            Project.Kind.CINTEROP -> "{ compilations[\"main\"].cinterops { val nativeLib by creating {} } }"
+        }
+
+        TESTED_TARGETS
 
         projectDir.resolve("build.gradle.kts").writeText(
             buildString {
                 appendLine(
                     """
-                        plugins {
-                            kotlin("multiplatform")
-                        }
-                
-                        kotlin {
-                            ${target("macosArm64")}
-                            ${target("iosArm64")}
-                
-                            sourceSets {
-                                nativeMain.dependencies {
-                    """.trimIndent()
+                    |plugins {
+                    |    kotlin("multiplatform")
+                    |}
+                    |
+                    |kotlin {
+                    """.trimMargin()
+                )
+                for (target in TESTED_TARGETS) {
+                    appendLine("    ${target(target)}")
+                }
+                appendLine()
+                appendLine(
+                    """
+                    |    sourceSets {
+                    |        nativeMain.dependencies {
+                    """.trimMargin()
                 )
                 project.dependencies.joinTo(this, "") {
                     "            implementation(project(\":${it.name}\"))\n"
                 }
                 appendLine(
                     """
-                            }
-                        }
-                    }
-                    """.trimIndent()
+                    |        }
+                    |    }
+                    |}
+                    """.trimMargin()
                 )
             }
         )
 
-        generateSourceFile(projectDir, project)
+        generateSourceFiles(projectDir, project)
     }
 
-    private fun generateSourceFile(projectDir: Path, project: Project) {
-        val srcDir = projectDir.resolve("src/nativeMain/kotlin")
-        Files.createDirectories(srcDir)
+    private fun generateSourceFiles(projectDir: Path, project: Project) {
+        fun writeKotlinSourceFile(specificTarget: String) {
+            val sourceSetName = "${specificTarget}Main"
+            val kotlinSrcDir = projectDir.resolve("src/$sourceSetName/kotlin")
+            Files.createDirectories(kotlinSrcDir)
 
-        val sourceFileName = project.name.replaceFirstChar { if (it.isLowerCase()) it.titlecaseChar() else it }.replace("_", "") + ".kt"
-        srcDir.resolve(sourceFileName).writeText(
-            buildString {
-                appendLine("@file:Suppress(\"unused\", \"PropertyName\", \"FunctionName\", \"ClassName\", \"RemoveRedundantQualifierName\", \"UnusedImport\", \"UnusedVariable\")")
-                appendLine()
-
-                if (project.packageName.isNotEmpty()) {
-                    appendLine("package ${project.packageName}")
+            val kotlinSourceFileName = project.name.replaceFirstChar { if (it.isLowerCase()) it.titlecaseChar() else it }.replace("_", "") + ".kt"
+            kotlinSrcDir.resolve(kotlinSourceFileName).writeText(
+                buildString {
+                    appendLine("@file:Suppress(\"unused\", \"PropertyName\", \"FunctionName\", \"ClassName\", \"RemoveRedundantQualifierName\", \"UnusedImport\", \"UnusedVariable\")")
+                    if (project.isCInterop) appendLine("@file:OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)")
                     appendLine()
+
+                    if (project.packageName.isNotEmpty()) {
+                        appendLine("package ${project.packageName}")
+                        appendLine()
+                    }
+
+                    // a placeholder for imports
+                    appendLine(IMPORTS)
+                    appendLine()
+
+                    if (!project.isCInterop) {
+                        val initialIndent = Indent()
+                        project.declarations.forEach { declaration -> render(declaration, initialIndent) }
+                        appendLine()
+                    }
+
+                    renderProjectMainFunction(project)
                 }
+            )
+        }
 
-                // a placeholder for imports
-                appendLine(IMPORTS)
-                appendLine()
+        // we need to put Kotlin source code into each leaf source set,
+        // otherwise the resolve from the Kotlin code into C-interop declarations won't work
+        for (target in TESTED_TARGETS) {
+            writeKotlinSourceFile(target)
+        }
 
-                val initialIndent = Indent()
-                project.declarations.forEach { declaration -> render(declaration, initialIndent) }
+        if (project.isCInterop) {
+            val defSrcDir = projectDir.resolve("src/nativeInterop/cinterop")
+            Files.createDirectories(defSrcDir)
 
-                appendLine()
-                renderProjectMainFunction(project)
-            }
-        )
+            defSrcDir.resolve("nativeLib.def").writeText(
+                buildString {
+                    appendLine("package=${project.packageName}")
+                    appendLine("language=C")
+                    appendLine("---")
+                    project.declarations.forEach { declaration ->
+                        check(declaration is Declaration.Function)
+                        // ignore types and return values for now
+                        appendLine("int ${declaration.name}() { return 100500; }")
+                    }
+                }
+            )
+        }
     }
 
     private fun StringBuilder.render(declaration: Declaration, indent: Indent) {
@@ -219,6 +260,7 @@ internal class ProjectSerializer(private val config: Config) {
     }
 
     companion object {
+        private val TESTED_TARGETS = listOf("macosArm64", "iosArm64")
         private const val IMPORTS = "// IMPORTS"
     }
 }

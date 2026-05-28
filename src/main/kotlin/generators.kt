@@ -6,7 +6,13 @@ internal class ProjectGenerator(private val config: Config) {
     private val generatedProjects = ArrayList<Project>()
 
     fun generateProjects(): List<Project> {
-        (0 until config.numberOfProjects).forEach { _ -> generateProject() }
+        val cInteropProjectIndices = generateSequence(0) { it + (config.numberOfProjects / config.cInteropProjects) }
+            .take(config.cInteropProjects)
+            .toSet()
+
+        (0 until config.numberOfProjects).forEach { index ->
+            generateProject(isCInterop = index in cInteropProjectIndices)
+        }
         check(generatedProjects.size == config.numberOfProjects)
         check(generatedProjects.none { it.isApplication })
 
@@ -16,7 +22,9 @@ internal class ProjectGenerator(private val config: Config) {
         return generatedProjects
     }
 
-    private fun generateProject(isApplication: Boolean = false) {
+    private fun generateProject(isApplication: Boolean = false, isCInterop: Boolean = false) {
+        check(!isApplication || !isCInterop)
+
         val dependencies = generatedProjects.takeLast(config.dependenciesPerProject)
 
         val project = if (isApplication) {
@@ -25,16 +33,16 @@ internal class ProjectGenerator(private val config: Config) {
                 packageName = "",
                 declarations = emptyList(),
                 dependencies = dependencies,
-                isApplication = true,
+                kind = Project.Kind.APP,
             )
         } else {
             val projectIndex = generatedProjects.size
             Project(
                 name = projectNameGenerator.getProjectName(projectIndex),
                 packageName = packageNameGenerator.getPackageName(projectIndex),
-                declarations = declarationGenerator.getDeclarations(dependencies),
+                declarations = declarationGenerator.getDeclarations(onlyTopLevelFunctions = isCInterop),
                 dependencies = dependencies,
-                isApplication = false,
+                kind = if (isCInterop) Project.Kind.CINTEROP else Project.Kind.REGULAR,
             )
         }
 
@@ -75,17 +83,19 @@ private class PackageNameGenerator(private val config: Config) {
 private class DeclarationGenerator(private val config: Config) {
     private var declarationSerialNumber = 0
 
-    fun getDeclarations(dependencies: List<Project>) = buildList {
+    fun getDeclarations(onlyTopLevelFunctions: Boolean) = buildList {
         repeat(config.declarationsPerProject) {
-            generateCallables()
-            generateClass {
+            generateCallables(onlyTopLevelFunctions)
+            if (!onlyTopLevelFunctions) {
                 generateClass {
                     generateClass {
+                        generateClass {
+                            generateCallables()
+                        }
                         generateCallables()
                     }
                     generateCallables()
                 }
-                generateCallables()
             }
         }
     }
@@ -116,9 +126,11 @@ private class DeclarationGenerator(private val config: Config) {
         )
     }
 
-    private fun MutableCollection<Declaration>.generateCallables() {
-        this += newProperty("kotlin.Int") { id -> id.toString() }
-        this += newProperty("kotlin.String") { id -> "\"property_$id\"" }
+    private fun MutableCollection<Declaration>.generateCallables(onlyTopLevelFunctions: Boolean = false) {
+        if (!onlyTopLevelFunctions) {
+            this += newProperty("kotlin.Int") { id -> id.toString() }
+            this += newProperty("kotlin.String") { id -> "\"property_$id\"" }
+        }
 
         this += newFunction("kotlin.collections.List<kotlin.Double>") { id -> "listOf($id * 3.14)" }
         this += newFunction("kotlin.Byte") { id -> "$id.toByte()" }
