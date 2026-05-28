@@ -81,8 +81,6 @@ internal class ProjectSerializer(private val config: Config) {
             Project.Kind.CINTEROP -> "{ compilations[\"main\"].cinterops { val nativeLib by creating {} } }"
         }
 
-        TESTED_TARGETS
-
         projectDir.resolve("build.gradle.kts").writeText(
             buildString {
                 appendLine(
