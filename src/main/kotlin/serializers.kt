@@ -55,9 +55,6 @@ internal class ProjectSerializer(private val config: Config) {
             |    repositories {
             |        mavenCentral()
             |    }
-            |
-            |    // Force all tasks to be never UP-TO-DATE.
-            |    tasks.all { outputs.upToDateWhen { false } }
             |}
             """.trimMargin()
         )
@@ -111,6 +108,9 @@ internal class ProjectSerializer(private val config: Config) {
                     |        }
                     |    }
                     |}
+                    |
+                    |// Force all tasks to be never UP-TO-DATE.
+                    |tasks.all { outputs.upToDateWhen { false } }
                     """.trimMargin()
                 )
             }
