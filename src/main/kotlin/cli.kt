@@ -3,16 +3,43 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import kotlin.system.exitProcess
+import kotlin.text.appendLine
 
 internal data class Config(
     val kotlinVersion: String,
+    val generationMode: GenerationMode,
     val outputDirectory: Path,
     val totalNumberOfLibraries: Int,
     val numberOfCInteropLibraries: Int,
     val declarationsPerLibrary: Int,
     val dependenciesPerLibrary: Int,
     val uniquePackages: Int,
-)
+) {
+    enum class GenerationMode(val alias: String, val description: String) {
+        SINGLE_GRADLE_PROJECT(alias = "single-gradle-project", description = "Single Gradle multi-module project (prefer it for relatively small number of modules)"),
+        SEPARATE_GRADLE_PROJECTS(alias = "separate-gradle-projects", description = "Separate Gradle projects with publication to local Maven (for large number of modules)"),
+        ;
+
+        override fun toString() = alias
+
+        fun renderForCliHelp() = buildString {
+            append("      $alias")
+            while (length != 34) append(" ")
+            append(description)
+        }
+
+        val useSeparateGradleProjects: Boolean get() = this == SEPARATE_GRADLE_PROJECTS
+
+        companion object {
+            val DEFAULT: GenerationMode get() = SINGLE_GRADLE_PROJECT
+
+            fun getByAlias(alias: String): GenerationMode {
+                entries.firstOrNull { it.alias == alias }?.let { return it }
+                printErrorAndExit("Unknown generation mode: $alias")
+            }
+        }
+    }
+}
 
 internal fun parseArgs(args: Array<String>): Config {
     val map = mutableMapOf<Parameter, String>()
@@ -44,10 +71,13 @@ internal fun parseArgs(args: Array<String>): Config {
         printErrorAndExit("The $outputDirectory path is not a directory.")
     }
 
+    val generationMode = map[GENERATION_MODE]?.let(Config.GenerationMode::getByAlias) ?: Config.GenerationMode.DEFAULT
+
     val totalNumberOfLibraries = getRequiredIntArgument(NUMBER_OF_LIBRARIES, minValue = 1, maxValue = 100_000)
 
     return Config(
         kotlinVersion = getRequiredArgument(KOTLIN_VERSION),
+        generationMode = generationMode,
         outputDirectory = outputDirectory,
         totalNumberOfLibraries = totalNumberOfLibraries,
         numberOfCInteropLibraries = getRequiredIntArgument(CINTEROP_LIBRARIES, minValue = 0, maxValue = totalNumberOfLibraries),
@@ -63,6 +93,12 @@ private enum class Parameter(val alias: String, val description: String) {
     /** General settings */
     KOTLIN_VERSION(alias = "--kotlin-version", description = "Kotlin version"),
     OUTPUT_DIRECTORY(alias = "--output-dir", description = "Path to the output directory (must be empty)"),
+    GENERATION_MODE(alias = "--generation-mode", description = "The generation mode (default is '${Config.GenerationMode.DEFAULT}')") {
+        override fun renderForCliHelp() = buildString {
+            appendLine(super.renderForCliHelp())
+            Config.GenerationMode.entries.joinTo(this, separator = "\n") { it.renderForCliHelp() }
+        }
+    },
     NUMBER_OF_LIBRARIES(alias = "--number-of-libraries", description = "Total number of libraries (positive number)"),
     CINTEROP_LIBRARIES(alias = "--cinterop-libraries", description = "Number of only C-interop libraries (non-negative number)"),
     UNIQUE_PACKAGES(alias = "--unique-packages", description = "Unique packages per all libraries (positive number)"),
@@ -70,15 +106,21 @@ private enum class Parameter(val alias: String, val description: String) {
     /** Library settings */
     DECLARATIONS_PER_LIBRARY(alias = "--declarations-per-library", description = "Declarations per library (positive number)"),
     DEPENDENCIES_PER_LIBRARY(alias = "--dependencies-per-library", description = "Number of dependencies per library (non-negative number)"),
-
     ;
 
-    override fun toString() = "'$alias'"
+    override fun toString() = alias
+
+    open fun renderForCliHelp() = buildString {
+        append("  $alias")
+        while (length != 30) append(" ")
+        append(description)
+    }
+
 
     companion object {
         fun getByAlias(alias: String): Parameter {
             entries.firstOrNull { it.alias == alias }?.let { return it }
-            printErrorAndExit("Unknown argument '$alias'")
+            printErrorAndExit("Unknown argument: $alias")
         }
     }
 }
@@ -90,14 +132,6 @@ private fun printErrorAndExit(message: String): Nothing {
 
 private fun printHelpAndExit(): Nothing {
     println("Usage:")
-    entries.forEach { entry ->
-        println(
-            buildString {
-                append("  ${entry.alias}")
-                while (length != 30) append(" ")
-                append(entry.description)
-            }
-        )
-    }
+    entries.forEach { entry -> println(entry.renderForCliHelp()) }
     exitProcess(0)
 }

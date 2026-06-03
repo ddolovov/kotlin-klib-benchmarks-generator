@@ -20,73 +20,191 @@ internal class ProjectSerializer(private val config: Config) {
         generateSequence(currentClassPath) { it.parent }.first { it.name == "build" }.parent
     }
 
+    private val mavenLocalRepo: Path by lazy {
+        val repo = config.outputDirectory.resolve("repo")
+        Files.createDirectories(repo)
+        repo
+    }
+
+    private val Project.projectDir: Path get() = config.outputDirectory.resolve(name)
+
     fun serializeProjects(projects: List<Project>) {
         Files.createDirectories(config.outputDirectory)
-
-        copyGradleWrapper()
-        writeMainBuildSettings(projects)
-        writeMainBuildFile()
-        writeGradlePropertiesFile()
-        writeBuildShFile()
 
         for (project in projects) {
             generateProject(project)
         }
+
+        when (config.generationMode) {
+            Config.GenerationMode.SINGLE_GRADLE_PROJECT -> {
+                copyGradleWrapperTo(config.outputDirectory)
+                writeGradlePropertiesFile(
+                    config.outputDirectory,
+                    logCompilerArgs = true,
+                    useConfigurationCache = true,
+                )
+                writeBuildSettingsFile(config.outputDirectory, rootProjectName = "kotlin-klib-benchmarks", includedProjects = projects)
+                writeBuildFile(
+                    dir = config.outputDirectory,
+                    specifyPluginVersion = true,
+                    dontApplyPlugin = true,
+                    publishing = false,
+                    useMavenLocalRepo = false,
+                    project = null,
+                )
+                writeBuildShFile(
+                    dir = config.outputDirectory,
+                    fileName = "build-all.sh",
+                    tasks = listOf("./gradlew assemble")
+                )
+            }
+
+            Config.GenerationMode.SEPARATE_GRADLE_PROJECTS -> {
+                writeBuildShFile(
+                    dir = config.outputDirectory,
+                    fileName = "build-libs.sh",
+                    tasks = projects.filter { !it.isApplication }.flatMap { project ->
+                        listOf(
+                            "echo About to build library: ${project.name}",
+                            "${project.projectDir.resolve("gradlew")} -p ${project.projectDir} publish -q"
+                        )
+                    }
+                )
+
+                writeBuildShFile(
+                    dir = config.outputDirectory,
+                    fileName = "build-app.sh",
+                    tasks = projects.filter { it.isApplication }.map { project ->
+                        "${project.projectDir.resolve("gradlew")} -p ${project.projectDir} assemble"
+                    }
+
+                )
+            }
+        }
     }
 
     @OptIn(ExperimentalPathApi::class)
-    private fun copyGradleWrapper() {
-        basePath.resolve("gradlew").copyTo(config.outputDirectory.resolve("gradlew"))
-        basePath.resolve("gradle").copyToRecursively(config.outputDirectory.resolve("gradle"), followLinks = true, overwrite = false)
+    private fun copyGradleWrapperTo(dir: Path) {
+        basePath.resolve("gradlew").copyTo(dir.resolve("gradlew"))
+        basePath.resolve("gradle").copyToRecursively(dir.resolve("gradle"), followLinks = true, overwrite = false)
     }
 
-    private fun writeMainBuildSettings(projects: List<Project>) {
-        config.outputDirectory.resolve("settings.gradle.kts").writeText(
+    private fun writeBuildSettingsFile(dir: Path, rootProjectName: String, includedProjects: List<Project>) {
+        dir.resolve("settings.gradle.kts").writeText(
             buildString {
-                appendLine("rootProject.name = \"kotlin-klib-benchmarks\"")
+                appendLine("rootProject.name = \"$rootProjectName\"")
                 appendLine()
-                projects.chunked(10).forEach { chunk ->
+                includedProjects.chunked(10).forEach { chunk ->
                     chunk.joinTo(this, prefix = "include(", postfix = ")\n") { '"' + it.name + '"' }
                 }
             }
         )
     }
 
-    private fun writeMainBuildFile() {
-        config.outputDirectory.resolve("build.gradle.kts").writeText(
-            """
-            |plugins {
-            |    kotlin("multiplatform") version "${config.kotlinVersion}" apply false
-            |}
-            |
-            |allprojects {
-            |    repositories {
-            |        mavenCentral()
-            |    }
-            |}
-            """.trimMargin()
+    private fun writeBuildFile(
+        dir: Path,
+        specifyPluginVersion: Boolean,
+        dontApplyPlugin: Boolean,
+        publishing: Boolean,
+        useMavenLocalRepo: Boolean,
+        project: Project?,
+    ) {
+        val pluginVersion = if (specifyPluginVersion) " version \"${config.kotlinVersion}\"" else ""
+        val applyPlugin = if (dontApplyPlugin) " apply false" else ""
+
+        dir.resolve("build.gradle.kts").writeText(
+            buildString {
+                appendLine("plugins {")
+                appendLine("    kotlin(\"multiplatform\")$pluginVersion$applyPlugin")
+                if (publishing) appendLine("    id(\"maven-publish\")")
+                appendLine("}")
+                appendLine()
+                appendLine("repositories {")
+                appendLine("    mavenCentral()")
+                if (useMavenLocalRepo) appendLine("    maven(\"$mavenLocalRepo\")")
+                appendLine("}")
+                appendLine()
+                if (config.generationMode.useSeparateGradleProjects && project != null) {
+                    appendLine("group = \"${project.mavenGroup}\"")
+                    appendLine("version = \"${project.mavenVersion}\"")
+                    appendLine()
+                }
+                if (project != null) {
+                    fun target(name: String): String = name + when (project.kind) {
+                        Project.Kind.REGULAR -> "()"
+                        Project.Kind.APP -> " { binaries.executable { entryPoint = \"main\" } }"
+                        Project.Kind.CINTEROP -> "{ compilations[\"main\"].cinterops { val nativeLib by creating {} } }"
+                    }
+
+                    fun dependency(otherProject: Project): String =
+                        if (config.generationMode.useSeparateGradleProjects)
+                            "\"${otherProject.gav}\""
+                        else
+                            "project(\":${otherProject.name}\")"
+
+                    appendLine("kotlin {")
+                    for (target in TESTED_TARGETS) {
+                        appendLine("    ${target(target)}")
+                    }
+                    appendLine()
+                    appendLine("    sourceSets {")
+                    appendLine("        nativeMain.dependencies {")
+                    project.dependencies.joinTo(this, "") {
+                        "            implementation(${dependency(it)})\n"
+                    }
+                    appendLine("        }")
+                    appendLine("    }")
+                    appendLine("}")
+                    appendLine()
+                    if (project.isApplication) {
+                        appendLine("// Force all tasks to be never UP-TO-DATE.")
+                        appendLine("tasks.all { outputs.upToDateWhen { false } }")
+                        appendLine()
+                    }
+
+                }
+                if (publishing && useMavenLocalRepo) {
+                    appendLine(
+                        """
+                        |publishing {
+                        |    repositories {
+                        |        maven("$mavenLocalRepo")
+                        |    }
+                        |}
+                        """.trimMargin()
+                    )
+                }
+            }
         )
     }
 
-    private fun writeGradlePropertiesFile() {
-        config.outputDirectory.resolve("gradle.properties").writeText(
-            listOf(
-                "kotlin.internal.compiler.arguments.log.level=warning",
+    private fun writeGradlePropertiesFile(
+        dir: Path,
+        logCompilerArgs: Boolean,
+        useConfigurationCache: Boolean,
+    ) {
+        dir.resolve("gradle.properties").writeText(
+            listOfNotNull(
+                "kotlin.internal.compiler.arguments.log.level=warning".takeIf { logCompilerArgs },
                 "kotlin.mpp.enableCInteropCommonization.nowarn=true",
-                "org.gradle.configuration-cache=true",
+                "org.gradle.configuration-cache=true".takeIf { useConfigurationCache },
                 "org.gradle.jvmargs=-Xmx16g",
             ).joinToString("\n", postfix = "\n")
         )
     }
 
-    private fun writeBuildShFile() {
-        val shFile = config.outputDirectory.resolve("build.sh")
+    private fun writeBuildShFile(dir: Path, fileName: String, tasks: List<String>) {
+        val shFile = dir.resolve(fileName)
         shFile.writeText(
-            """
-            |#!/bin/sh
-            |
-            |./gradlew assemble
-            """.trimMargin()
+            buildString {
+                appendLine("#!/bin/sh")
+                appendLine()
+                appendLine("set -e")
+                appendLine()
+                for (task in tasks) {
+                    appendLine(task)
+                }
+            }
         )
         Files.setPosixFilePermissions(
             shFile,
@@ -99,65 +217,34 @@ internal class ProjectSerializer(private val config: Config) {
     }
 
     private fun generateProject(project: Project) {
-        val projectDir = config.outputDirectory.resolve(project.name)
-        Files.createDirectories(projectDir)
+        Files.createDirectories(project.projectDir)
 
-        fun target(name: String): String = name + when (project.kind) {
-            Project.Kind.REGULAR -> "()"
-            Project.Kind.APP -> " { binaries.executable { entryPoint = \"main\" } }"
-            Project.Kind.CINTEROP -> "{ compilations[\"main\"].cinterops { val nativeLib by creating {} } }"
+        if (config.generationMode.useSeparateGradleProjects) {
+            copyGradleWrapperTo(project.projectDir)
+            writeGradlePropertiesFile(
+                dir = project.projectDir,
+                logCompilerArgs = project.isApplication,
+                useConfigurationCache = project.isApplication,
+            )
+            writeBuildSettingsFile(project.projectDir, rootProjectName = project.name, includedProjects = emptyList())
         }
 
-        projectDir.resolve("build.gradle.kts").writeText(
-            buildString {
-                appendLine(
-                    """
-                    |plugins {
-                    |    kotlin("multiplatform")
-                    |}
-                    |
-                    |kotlin {
-                    """.trimMargin()
-                )
-                for (target in TESTED_TARGETS) {
-                    appendLine("    ${target(target)}")
-                }
-                appendLine()
-                appendLine(
-                    """
-                    |    sourceSets {
-                    |        nativeMain.dependencies {
-                    """.trimMargin()
-                )
-                project.dependencies.joinTo(this, "") {
-                    "            implementation(project(\":${it.name}\"))\n"
-                }
-                appendLine(
-                    """
-                    |        }
-                    |    }
-                    |}
-                    """.trimMargin()
-                )
-                if (project.isApplication) {
-                    appendLine(
-                        """
-                        |
-                        |// Force all tasks to be never UP-TO-DATE.
-                        |tasks.all { outputs.upToDateWhen { false } }
-                        """.trimMargin()
-                    )
-                }
-            }
+        writeBuildFile(
+            dir = project.projectDir,
+            specifyPluginVersion = config.generationMode.useSeparateGradleProjects,
+            dontApplyPlugin = false,
+            publishing = config.generationMode.useSeparateGradleProjects && !project.isApplication,
+            useMavenLocalRepo = config.generationMode.useSeparateGradleProjects,
+            project = project,
         )
 
-        generateSourceFiles(projectDir, project)
+        generateSourceFiles(project)
     }
 
-    private fun generateSourceFiles(projectDir: Path, project: Project) {
+    private fun generateSourceFiles(project: Project) {
         fun writeKotlinSourceFile(specificTarget: String) {
             val sourceSetName = "${specificTarget}Main"
-            val kotlinSrcDir = projectDir.resolve("src/$sourceSetName/kotlin")
+            val kotlinSrcDir = project.projectDir.resolve("src/$sourceSetName/kotlin")
             Files.createDirectories(kotlinSrcDir)
 
             val kotlinSourceFileName = project.name.replaceFirstChar { if (it.isLowerCase()) it.titlecaseChar() else it }.replace("_", "") + ".kt"
@@ -194,7 +281,7 @@ internal class ProjectSerializer(private val config: Config) {
         }
 
         if (project.isCInterop) {
-            val defSrcDir = projectDir.resolve("src/nativeInterop/cinterop")
+            val defSrcDir = project.projectDir.resolve("src/nativeInterop/cinterop")
             Files.createDirectories(defSrcDir)
 
             defSrcDir.resolve("nativeLib.def").writeText(

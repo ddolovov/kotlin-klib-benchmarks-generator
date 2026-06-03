@@ -10,11 +10,12 @@ ARG_FILE=$(mktemp)
 
 cat > $ARG_FILE <<EOF
 --output-dir $OUTPUT_DIR
---number-of-libraries 100
---cinterop-libraries 50
---declarations-per-library 5
+--generation-mode separate-gradle-projects
+--number-of-libraries 5000
+--cinterop-libraries 500
+--declarations-per-library 50
 --dependencies-per-library 3
---unique-packages 20
+--unique-packages 1000
 --kotlin-version 2.4.0
 EOF
 
@@ -38,5 +39,8 @@ $ROOT_DIR/gradlew -p $ROOT_DIR run -P appArgs=$ARG_FILE
 echo "===== Generating projects: Done."
 
 echo
-echo "To build the generated libraries and then the application run the following command:"
-echo "cd $OUTPUT_DIR && ./build-all.sh"
+echo "To build and publish to Maven local the generated libraries run the following command:"
+echo "cd $OUTPUT_DIR && ./build-libs.sh"
+echo
+echo "After the libraries are published, you can build the application by running:"
+echo "cd $OUTPUT_DIR && ./build-app.sh"

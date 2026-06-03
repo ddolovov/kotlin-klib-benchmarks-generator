@@ -10,6 +10,12 @@ internal class Project(
     val isApplication get() = kind == Kind.APP
     val isCInterop get() = kind == Kind.CINTEROP
 
+    val mavenGroup get() = "org.sample.kotlin.generated.klib"
+    val mavenVersion get() = "0.0.1"
+
+    val ga get() = "$mavenGroup:$name"
+    val gav get() = "$ga:$mavenVersion"
+
     init {
         if (isApplication) {
             check(packageName.isEmpty())

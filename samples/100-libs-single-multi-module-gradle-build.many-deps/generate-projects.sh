@@ -38,5 +38,5 @@ $ROOT_DIR/gradlew -p $ROOT_DIR run -P appArgs=$ARG_FILE
 echo "===== Generating projects: Done."
 
 echo
-echo "To build the generated projects run the following command:"
-echo "cd $OUTPUT_DIR && ./build.sh"
+echo "To build the generated libraries and then the application run the following command:"
+echo "cd $OUTPUT_DIR && ./build-all.sh"
