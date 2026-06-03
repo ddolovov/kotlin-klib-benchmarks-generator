@@ -72,6 +72,7 @@ internal class ProjectSerializer(private val config: Config) {
         config.outputDirectory.resolve("gradle.properties").writeText(
             listOf(
                 "kotlin.internal.compiler.arguments.log.level=warning",
+                "kotlin.mpp.enableCInteropCommonization.nowarn=true",
                 "org.gradle.jvmargs=-Xmx16g",
             ).joinToString("\n", postfix = "\n")
         )
