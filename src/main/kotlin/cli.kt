@@ -7,10 +7,10 @@ import kotlin.system.exitProcess
 internal data class Config(
     val kotlinVersion: String,
     val outputDirectory: Path,
-    val numberOfProjects: Int,
-    val cInteropProjects: Int,
-    val declarationsPerProject: Int,
-    val dependenciesPerProject: Int,
+    val totalNumberOfLibraries: Int,
+    val numberOfCInteropLibraries: Int,
+    val declarationsPerLibrary: Int,
+    val dependenciesPerLibrary: Int,
     val uniquePackages: Int,
 )
 
@@ -44,16 +44,16 @@ internal fun parseArgs(args: Array<String>): Config {
         printErrorAndExit("The $outputDirectory path is not a directory.")
     }
 
-    val numberOfProjects = getRequiredIntArgument(NUMBER_OF_PROJECTS, minValue = 1, maxValue = 100_000)
+    val totalNumberOfLibraries = getRequiredIntArgument(NUMBER_OF_LIBRARIES, minValue = 1, maxValue = 100_000)
 
     return Config(
         kotlinVersion = getRequiredArgument(KOTLIN_VERSION),
         outputDirectory = outputDirectory,
-        numberOfProjects = numberOfProjects,
-        cInteropProjects = getRequiredIntArgument(CINTEROP_PROJECTS, minValue = 0, maxValue = numberOfProjects),
-        declarationsPerProject = getRequiredIntArgument(DECLARATIONS_PER_PROJECT, minValue = 1, maxValue = 100_000),
-        dependenciesPerProject = getRequiredIntArgument(DEPENDENCIES_PER_PROJECT, minValue = 0, maxValue = numberOfProjects),
-        uniquePackages = getRequiredIntArgument(UNIQUE_PACKAGES, minValue = 1, maxValue = numberOfProjects),
+        totalNumberOfLibraries = totalNumberOfLibraries,
+        numberOfCInteropLibraries = getRequiredIntArgument(CINTEROP_LIBRARIES, minValue = 0, maxValue = totalNumberOfLibraries),
+        declarationsPerLibrary = getRequiredIntArgument(DECLARATIONS_PER_LIBRARY, minValue = 1, maxValue = 100_000),
+        dependenciesPerLibrary = getRequiredIntArgument(DEPENDENCIES_PER_LIBRARY, minValue = 0, maxValue = totalNumberOfLibraries),
+        uniquePackages = getRequiredIntArgument(UNIQUE_PACKAGES, minValue = 1, maxValue = totalNumberOfLibraries),
     )
 }
 
@@ -63,13 +63,13 @@ private enum class Parameter(val alias: String, val description: String) {
     /** General settings */
     KOTLIN_VERSION(alias = "--kotlin-version", description = "Kotlin version"),
     OUTPUT_DIRECTORY(alias = "--output-dir", description = "Path to the output directory (must be empty)"),
-    NUMBER_OF_PROJECTS(alias = "--number-of-projects", description = "Number of projects (positive number)"),
-    CINTEROP_PROJECTS(alias = "--cinterop-projects", description = "Number of projects (non-negative number)"),
+    NUMBER_OF_LIBRARIES(alias = "--number-of-libraries", description = "Total number of libraries (positive number)"),
+    CINTEROP_LIBRARIES(alias = "--cinterop-libraries", description = "Number of only C-interop libraries (non-negative number)"),
+    UNIQUE_PACKAGES(alias = "--unique-packages", description = "Unique packages per all libraries (positive number)"),
 
-    /** Project settings */
-    DECLARATIONS_PER_PROJECT(alias = "--declarations-per-project", description = "Declarations per projects (positive number)"),
-    DEPENDENCIES_PER_PROJECT(alias = "--dependencies-per-project", description = "Number of dependencies per project (non-negative number)"),
-    UNIQUE_PACKAGES(alias = "--unique-packages", description = "Unique packages per all projects (positive number)"),
+    /** Library settings */
+    DECLARATIONS_PER_LIBRARY(alias = "--declarations-per-library", description = "Declarations per library (positive number)"),
+    DEPENDENCIES_PER_LIBRARY(alias = "--dependencies-per-library", description = "Number of dependencies per library (non-negative number)"),
 
     ;
 

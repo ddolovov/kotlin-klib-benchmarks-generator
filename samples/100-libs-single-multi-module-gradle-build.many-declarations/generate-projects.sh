@@ -10,10 +10,10 @@ ARG_FILE=$(mktemp)
 
 cat > $ARG_FILE <<EOF
 --output-dir $OUTPUT_DIR
---number-of-projects 100
---cinterop-projects 10
---declarations-per-project 50
---dependencies-per-project 3
+--number-of-libraries 100
+--cinterop-libraries 10
+--declarations-per-library 50
+--dependencies-per-library 3
 --unique-packages 20
 --kotlin-version 2.4.0
 EOF

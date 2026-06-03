@@ -6,14 +6,14 @@ internal class ProjectGenerator(private val config: Config) {
     private val generatedProjects = ArrayList<Project>()
 
     fun generateProjects(): List<Project> {
-        val cInteropProjectIndices = generateSequence(0) { it + (config.numberOfProjects / config.cInteropProjects) }
-            .take(config.cInteropProjects)
+        val cInteropProjectIndices = generateSequence(0) { it + (config.totalNumberOfLibraries / config.numberOfCInteropLibraries) }
+            .take(config.numberOfCInteropLibraries)
             .toSet()
 
-        (0 until config.numberOfProjects).forEach { index ->
+        (0 until config.totalNumberOfLibraries).forEach { index ->
             generateProject(isCInterop = index in cInteropProjectIndices)
         }
-        check(generatedProjects.size == config.numberOfProjects)
+        check(generatedProjects.size == config.totalNumberOfLibraries)
         check(generatedProjects.none { it.isApplication })
 
         generateProject(isApplication = true)
@@ -25,7 +25,7 @@ internal class ProjectGenerator(private val config: Config) {
     private fun generateProject(isApplication: Boolean = false, isCInterop: Boolean = false) {
         check(!isApplication || !isCInterop)
 
-        val dependencies = generatedProjects.takeLast(config.dependenciesPerProject)
+        val dependencies = generatedProjects.takeLast(config.dependenciesPerLibrary)
 
         val project = if (isApplication) {
             Project(
@@ -52,13 +52,13 @@ internal class ProjectGenerator(private val config: Config) {
 
 private class ProjectNameGenerator(private val config: Config) {
     fun getProjectName(projectIndex: Int): String {
-        return "project_" + projectIndex.padWithZeros(config.numberOfProjects)
+        return "project_" + projectIndex.padWithZeros(config.totalNumberOfLibraries)
     }
 }
 
 private class PackageNameGenerator(private val config: Config) {
     fun getPackageName(projectIndex: Int): String {
-        val avgProjectsWithSamePackageName: Double = config.numberOfProjects.toDouble() / config.uniquePackages
+        val avgProjectsWithSamePackageName: Double = config.totalNumberOfLibraries.toDouble() / config.uniquePackages
         val packageNameIndex: Int = (projectIndex / avgProjectsWithSamePackageName).toInt()
 
         //  There can be 0, 1, 2 or 3 package segments depending on the package index.
@@ -68,7 +68,7 @@ private class PackageNameGenerator(private val config: Config) {
             "" // empty package
         else {
             buildList {
-                this += "package_" + packageNameIndex.padWithZeros(config.numberOfProjects)
+                this += "package_" + packageNameIndex.padWithZeros(config.totalNumberOfLibraries)
                 if (nameSegmentsInPackageName > 1) {
                     this += "foo"
                     if (nameSegmentsInPackageName > 2) {
@@ -84,7 +84,7 @@ private class DeclarationGenerator(private val config: Config) {
     private var declarationSerialNumber = 0
 
     fun getDeclarations(onlyTopLevelFunctions: Boolean) = buildList {
-        repeat(config.declarationsPerProject) {
+        repeat(config.declarationsPerLibrary) {
             generateCallables(onlyTopLevelFunctions)
             if (!onlyTopLevelFunctions) {
                 generateClass {

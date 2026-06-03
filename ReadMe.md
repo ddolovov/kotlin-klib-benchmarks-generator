@@ -4,10 +4,10 @@
 ```
 java -cp MainKt \
   --output-dir <outputDir> \
-  --number-of-projects 100 \
-  --cinterop-projects 10 \
-  --declarations-per-project 5 \
-  --dependencies-per-project 3 \
+  --number-of-libraries 100 \
+  --cinterop-libraries 10 \
+  --declarations-per-library 5 \
+  --dependencies-per-library 3 \
   --unique-packages 20
   --kotlin-version 2.4.0 \
 ```
