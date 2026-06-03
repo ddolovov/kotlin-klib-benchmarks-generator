@@ -4,4 +4,5 @@
 .claude/
 .DS_Store
 build/
+samples/**/generated-projects/
 local.properties

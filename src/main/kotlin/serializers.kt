@@ -1,5 +1,13 @@
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.attribute.PosixFilePermission
+import java.nio.file.attribute.PosixFilePermission.GROUP_EXECUTE
+import java.nio.file.attribute.PosixFilePermission.GROUP_READ
+import java.nio.file.attribute.PosixFilePermission.OTHERS_EXECUTE
+import java.nio.file.attribute.PosixFilePermission.OTHERS_READ
+import java.nio.file.attribute.PosixFilePermission.OWNER_EXECUTE
+import java.nio.file.attribute.PosixFilePermission.OWNER_READ
+import java.nio.file.attribute.PosixFilePermission.OWNER_WRITE
 import kotlin.io.path.ExperimentalPathApi
 import kotlin.io.path.copyTo
 import kotlin.io.path.copyToRecursively
@@ -20,6 +28,7 @@ internal class ProjectSerializer(private val config: Config) {
         writeMainBuildSettings(projects)
         writeMainBuildFile()
         writeGradlePropertiesFile()
+        writeBuildShFile()
 
         for (project in projects) {
             generateProject(project)
@@ -66,6 +75,25 @@ internal class ProjectSerializer(private val config: Config) {
                 "kotlin.internal.compiler.arguments.log.level=warning",
                 "org.gradle.jvmargs=-Xmx16g",
             ).joinToString("\n", postfix = "\n")
+        )
+    }
+
+    private fun writeBuildShFile() {
+        val shFile = config.outputDirectory.resolve("build.sh")
+        shFile.writeText(
+            """
+            |#!/bin/sh
+            |
+            |./gradlew assemble
+            """.trimMargin()
+        )
+        Files.setPosixFilePermissions(
+            shFile,
+            setOf(
+                OWNER_READ, OWNER_WRITE, OWNER_EXECUTE,
+                GROUP_READ, GROUP_EXECUTE,
+                OTHERS_READ, OTHERS_EXECUTE,
+            )
         )
     }
 
