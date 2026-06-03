@@ -1,6 +1,5 @@
 import java.nio.file.Files
 import java.nio.file.Path
-import java.nio.file.attribute.PosixFilePermission
 import java.nio.file.attribute.PosixFilePermission.GROUP_EXECUTE
 import java.nio.file.attribute.PosixFilePermission.GROUP_READ
 import java.nio.file.attribute.PosixFilePermission.OTHERS_EXECUTE
@@ -136,11 +135,17 @@ internal class ProjectSerializer(private val config: Config) {
                     |        }
                     |    }
                     |}
-                    |
-                    |// Force all tasks to be never UP-TO-DATE.
-                    |tasks.all { outputs.upToDateWhen { false } }
                     """.trimMargin()
                 )
+                if (project.isApplication) {
+                    appendLine(
+                        """
+                        |
+                        |// Force all tasks to be never UP-TO-DATE.
+                        |tasks.all { outputs.upToDateWhen { false } }
+                        """.trimMargin()
+                    )
+                }
             }
         )
 
