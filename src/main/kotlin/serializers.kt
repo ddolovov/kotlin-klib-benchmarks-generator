@@ -35,9 +35,10 @@ internal class ProjectSerializer(private val config: Config) {
             generateProject(project)
         }
 
+        copyGradleWrapperTo(config.outputDirectory)
+
         when (config.generationMode) {
             Config.GenerationMode.SINGLE_GRADLE_PROJECT -> {
-                copyGradleWrapperTo(config.outputDirectory)
                 writeGradlePropertiesFile(
                     config.outputDirectory,
                     logCompilerArgs = false,
@@ -70,7 +71,7 @@ internal class ProjectSerializer(private val config: Config) {
                         val progress = ((index + 1) * 100 / libraryProjects.size).toString().padStart(3, ' ')
                         listOf(
                             "echo [$progress%] About to build library: ${project.name}",
-                            "${project.projectDir.resolve("gradlew")} -p ${project.projectDir} publish -q"
+                            "./gradlew -p ${project.projectDir} publish -q"
                         )
                     }
                 )
@@ -79,7 +80,7 @@ internal class ProjectSerializer(private val config: Config) {
                     dir = config.outputDirectory,
                     fileName = "build-app.sh",
                     tasks = appProjects.map { project ->
-                        "${project.projectDir.resolve("gradlew")} -p ${project.projectDir} assemble"
+                        "./gradlew -p ${project.projectDir} assemble"
                     }
                 )
             }
@@ -223,7 +224,6 @@ internal class ProjectSerializer(private val config: Config) {
         Files.createDirectories(project.projectDir)
 
         if (config.generationMode.useSeparateGradleProjects) {
-            copyGradleWrapperTo(project.projectDir)
             writeBuildSettingsFile(project.projectDir, rootProjectName = project.name, includedProjects = emptyList())
         }
 
