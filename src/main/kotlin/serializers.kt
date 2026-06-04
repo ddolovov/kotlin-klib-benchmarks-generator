@@ -70,7 +70,7 @@ internal class ProjectSerializer(private val config: Config) {
                     tasks = libraryProjects.flatMapIndexed { index, project ->
                         val progress = ((index + 1) * 100 / libraryProjects.size).toString().padStart(3, ' ')
                         listOf(
-                            "echo [$progress%] About to build library: ${project.name}",
+                            "echo '[$progress%] About to build library: ${project.name}'",
                             "if [ ! -e ${project.projectDir}/.done ]; then",
                             "  ./gradlew -p ${project.projectDir} publish -q && touch ${project.projectDir}/.done || exit 1",
                             "fi",
@@ -140,7 +140,7 @@ internal class ProjectSerializer(private val config: Config) {
                     fun target(name: String): String = name + when (project.kind) {
                         Project.Kind.REGULAR -> "()"
                         Project.Kind.APP -> " { binaries.executable { entryPoint = \"main\" } }"
-                        Project.Kind.CINTEROP -> "{ compilations[\"main\"].cinterops { val nativeLib by creating {} } }"
+                        Project.Kind.CINTEROP -> " { compilations[\"main\"].cinterops { val nativeLib by creating {} } }"
                     }
 
                     fun dependency(otherProject: Project): String =
