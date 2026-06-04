@@ -150,7 +150,7 @@ internal class ProjectSerializer(private val config: Config) {
                             "project(\":${otherProject.name}\")"
 
                     appendLine("kotlin {")
-                    for (target in TESTED_TARGETS) {
+                    for (target in config.targets) {
                         appendLine("    ${target(target)}")
                     }
                     appendLine()
@@ -285,7 +285,7 @@ internal class ProjectSerializer(private val config: Config) {
 
         // we need to put Kotlin source code into each leaf source set,
         // otherwise the resolve from the Kotlin code into C-interop declarations won't work
-        for (target in TESTED_TARGETS) {
+        for (target in config.targets) {
             writeKotlinSourceFile(target)
         }
 
@@ -399,7 +399,6 @@ internal class ProjectSerializer(private val config: Config) {
     }
 
     companion object {
-        private val TESTED_TARGETS = listOf("macosArm64", "iosArm64")
         private const val IMPORTS = "// IMPORTS"
     }
 }

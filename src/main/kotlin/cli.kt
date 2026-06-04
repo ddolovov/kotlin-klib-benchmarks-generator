@@ -1,3 +1,4 @@
+import Config.Companion.DEFAULT_TARGET
 import Parameter.*
 import java.nio.file.Files
 import java.nio.file.Path
@@ -14,6 +15,7 @@ internal data class Config(
     val declarationsPerLibrary: Int,
     val dependenciesPerLibrary: Int,
     val uniquePackages: Int,
+    val targets: Set<String>,
 ) {
     enum class GenerationMode(val alias: String, val description: String) {
         SINGLE_GRADLE_PROJECT(alias = "single-gradle-project", description = "Single Gradle multi-module project (prefer it for relatively small number of modules)"),
@@ -38,6 +40,10 @@ internal data class Config(
                 printErrorAndExit("Unknown generation mode: $alias")
             }
         }
+    }
+
+    companion object {
+        const val DEFAULT_TARGET = "macosArm64"
     }
 }
 
@@ -73,6 +79,12 @@ internal fun parseArgs(args: Array<String>): Config {
 
     val generationMode = map[GENERATION_MODE]?.let(Config.GenerationMode::getByAlias) ?: Config.GenerationMode.DEFAULT
 
+    val targets = map[TARGETS]?.let { rawTargets ->
+        val targets = rawTargets.split(',').filter(String::isNotBlank).toSet()
+        if (targets.isEmpty()) printErrorAndExit("Invalid targets specified in $TARGETS: $rawTargets")
+        targets
+    } ?: setOf(DEFAULT_TARGET)
+
     val totalNumberOfLibraries = getRequiredIntArgument(NUMBER_OF_LIBRARIES, minValue = 1, maxValue = 100_000)
 
     return Config(
@@ -84,6 +96,7 @@ internal fun parseArgs(args: Array<String>): Config {
         declarationsPerLibrary = getRequiredIntArgument(DECLARATIONS_PER_LIBRARY, minValue = 1, maxValue = 100_000),
         dependenciesPerLibrary = getRequiredIntArgument(DEPENDENCIES_PER_LIBRARY, minValue = 0, maxValue = totalNumberOfLibraries),
         uniquePackages = getRequiredIntArgument(UNIQUE_PACKAGES, minValue = 1, maxValue = totalNumberOfLibraries),
+        targets = targets,
     )
 }
 
@@ -102,6 +115,7 @@ private enum class Parameter(val alias: String, val description: String) {
     NUMBER_OF_LIBRARIES(alias = "--number-of-libraries", description = "Total number of libraries (positive number)"),
     CINTEROP_LIBRARIES(alias = "--cinterop-libraries", description = "Number of only C-interop libraries (non-negative number)"),
     UNIQUE_PACKAGES(alias = "--unique-packages", description = "Unique packages per all libraries (positive number)"),
+    TARGETS(alias = "--targets", description = "Names of Native targets in Gradle, comma-separated (default is '$DEFAULT_TARGET')"),
 
     /** Library settings */
     DECLARATIONS_PER_LIBRARY(alias = "--declarations-per-library", description = "Declarations per library (positive number)"),
