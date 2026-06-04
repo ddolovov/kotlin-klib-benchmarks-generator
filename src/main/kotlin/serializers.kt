@@ -40,7 +40,7 @@ internal class ProjectSerializer(private val config: Config) {
                 copyGradleWrapperTo(config.outputDirectory)
                 writeGradlePropertiesFile(
                     config.outputDirectory,
-                    logCompilerArgs = true,
+                    logCompilerArgs = false,
                     useConfigurationCache = true,
                 )
                 writeBuildSettingsFile(config.outputDirectory, rootProjectName = "kotlin-klib-benchmarks", includedProjects = projects)
@@ -221,12 +221,15 @@ internal class ProjectSerializer(private val config: Config) {
 
         if (config.generationMode.useSeparateGradleProjects) {
             copyGradleWrapperTo(project.projectDir)
+            writeBuildSettingsFile(project.projectDir, rootProjectName = project.name, includedProjects = emptyList())
+        }
+
+        if (config.generationMode.useSeparateGradleProjects || project.isApplication) {
             writeGradlePropertiesFile(
                 dir = project.projectDir,
                 logCompilerArgs = project.isApplication,
                 useConfigurationCache = project.isApplication,
             )
-            writeBuildSettingsFile(project.projectDir, rootProjectName = project.name, includedProjects = emptyList())
         }
 
         writeBuildFile(
