@@ -24,7 +24,7 @@ echo "Generator CLI args:\n$(cat $ARG_FILE)"
 
 echo
 echo "===== Removing previously generated projects in $OUTPUT_DIR"
-rm -rf $OUTPUT_DIR
+rm -rfv $OUTPUT_DIR
 mkdir $OUTPUT_DIR
 echo "===== Removing previously generated projects in $OUTPUT_DIR: Done."
 
