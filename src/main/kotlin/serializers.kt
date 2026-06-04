@@ -60,12 +60,16 @@ internal class ProjectSerializer(private val config: Config) {
             }
 
             Config.GenerationMode.SEPARATE_GRADLE_PROJECTS -> {
+                val (appProjects, libraryProjects) = projects.partition { it.isApplication }
+                check(appProjects.size == 1)
+
                 writeBuildShFile(
                     dir = config.outputDirectory,
                     fileName = "build-libs.sh",
-                    tasks = projects.filter { !it.isApplication }.flatMap { project ->
+                    tasks = libraryProjects.flatMapIndexed { index, project ->
+                        val progress = ((index + 1) * 100 / libraryProjects.size).toString().padStart(3, ' ')
                         listOf(
-                            "echo About to build library: ${project.name}",
+                            "echo [$progress%] About to build library: ${project.name}",
                             "${project.projectDir.resolve("gradlew")} -p ${project.projectDir} publish -q"
                         )
                     }
@@ -74,10 +78,9 @@ internal class ProjectSerializer(private val config: Config) {
                 writeBuildShFile(
                     dir = config.outputDirectory,
                     fileName = "build-app.sh",
-                    tasks = projects.filter { it.isApplication }.map { project ->
+                    tasks = appProjects.map { project ->
                         "${project.projectDir.resolve("gradlew")} -p ${project.projectDir} assemble"
                     }
-
                 )
             }
         }
