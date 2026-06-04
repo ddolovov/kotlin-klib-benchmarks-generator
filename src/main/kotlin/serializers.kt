@@ -71,7 +71,10 @@ internal class ProjectSerializer(private val config: Config) {
                         val progress = ((index + 1) * 100 / libraryProjects.size).toString().padStart(3, ' ')
                         listOf(
                             "echo [$progress%] About to build library: ${project.name}",
-                            "./gradlew -p ${project.projectDir} publish -q"
+                            "if [ ! -e ${project.projectDir}/.done ]; then",
+                            "  ./gradlew -p ${project.projectDir} publish -q && touch ${project.projectDir}/.done || exit 1",
+                            "fi",
+                            "",
                         )
                     }
                 )
