@@ -140,7 +140,12 @@ internal class ProjectSerializer(private val config: Config) {
                     fun target(name: String): String = name + when (project.kind) {
                         Project.Kind.REGULAR -> "()"
                         Project.Kind.APP -> " { binaries.executable { entryPoint = \"main\" } }"
-                        Project.Kind.CINTEROP -> " { compilations[\"main\"].cinterops { val nativeLib by creating {} } }"
+                        Project.Kind.CINTEROP -> {
+                            // we don't actually use dependencies between c-interop libraries
+                            // to avoid importing the same class in multiple c-interop KLIBs,
+                            // so we may explicitly set the empty list of dependencies for C-interop settings in KGP DSL
+                            " { compilations[\"main\"].cinterops { val nativeLib by creating { dependencyFiles = files() } } }"
+                        }
                     }
 
                     fun dependency(otherProject: Project): String =
